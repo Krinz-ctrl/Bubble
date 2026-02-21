@@ -9,7 +9,9 @@ import cron from 'node-cron';
 import mongoose from 'mongoose';
 import { MongoClient } from 'mongodb';
 import Bubble from './BubbleModel.js';
+import AudioPost from './AudioPostModel.js';
 import { getFeed } from './feedController.js';
+import { getAudioFeed } from './audioFeedController.js';
 
 const hasCloudinaryUrl = !!process.env.CLOUDINARY_URL;
 const hasCloudinaryKeys =
@@ -26,6 +28,10 @@ if (hasCloudinaryUrl) {
   });
 }
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4'];
+const MAX_DURATION_SEC = 60;
+const DEFAULT_EXPIRY_HOURS = 24;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,18 +64,70 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
-  console.log('FILE:', req.file);
-  console.log('BODY:', req.body);
+app.post('/api/audio/upload', upload.single('audio'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No audio file' });
   }
+  const mimetype = (req.file.mimetype || '').toLowerCase();
+  const isAllowed = ALLOWED_AUDIO_TYPES.some((t) => mimetype === t) || mimetype.startsWith('audio/');
+  if (!isAllowed) {
+    return res.status(400).json({ error: 'Invalid file type. Allowed: audio only.' });
+  }
+  const durationSec = Math.min(Number(req.body.duration) || 0, MAX_DURATION_SEC);
   if (!hasCloudinaryUrl && !hasCloudinaryKeys) {
     return res.status(503).json({ error: 'Cloudinary not configured' });
   }
   try {
     const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     const result = await cloudinary.uploader.upload(dataUri, { resource_type: 'video' });
+    const createdAt = new Date();
+    const expiryAt = new Date(createdAt.getTime() + DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000);
+    const newPost = await AudioPost.create({
+      userId: req.body.userId || null,
+      username: req.body.username || 'anonymous',
+      audioUrl: result.secure_url,
+      duration: durationSec,
+      createdAt,
+      expiryAt,
+      likes: 0,
+      impressions: 0,
+      avatar: req.body.avatar || null,
+      anonymousId: req.body.anonymousId || '',
+    });
+    const post = newPost.toObject ? newPost.toObject() : newPost;
+    return res.status(200).json({ post });
+  } catch (err) {
+    console.error('Upload failed:', err);
+    return res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+app.get('/api/audio/feed', async (req, res) => {
+  try {
+    const posts = await getAudioFeed();
+    return res.status(200).json({ posts });
+  } catch (err) {
+    console.error('Feed failed:', err);
+    return res.status(500).json({ error: 'Feed failed' });
+  }
+});
+
+app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
+  console.log('FILE:', req.file);
+  console.log('BODY:', req.body);
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file received' });
+  }
+  if (!hasCloudinaryUrl && !hasCloudinaryKeys) {
+    return res.status(503).json({ error: 'Cloudinary not configured' });
+  }
+  try {
+    const dataUri =
+      'data:' + req.file.mimetype + ';base64,' + req.file.buffer.toString('base64');
+    const result = await cloudinary.uploader.upload(dataUri, {
+      resource_type: 'video',
+    });
+    console.log('Cloudinary URL:', result.secure_url);
     const newBubble = await Bubble.create({
       audioUrl: result.secure_url,
       avatar: req.body.avatar || null,
@@ -79,7 +137,6 @@ app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
       likes: 0,
       impressions: 0,
     });
-    console.log('Saved Bubble:', newBubble);
     res.json({ bubble: newBubble });
   } catch (err) {
     console.error('Upload failed:', err);
@@ -103,8 +160,12 @@ app.post('/bubble/impression', (req, res) => {
 
 connectDB().then(() => {
   cron.schedule('0 * * * *', async () => {
-    const result = await Bubble.deleteMany({ expiryAt: { $lte: new Date() } });
-    if (result.deletedCount > 0) console.log(`Deleted ${result.deletedCount} expired bubble(s)`);
+    const [bubbleResult, postResult] = await Promise.all([
+      Bubble.deleteMany({ expiryAt: { $lte: new Date() } }),
+      AudioPost.deleteMany({ expiryAt: { $lte: new Date() } }),
+    ]);
+    const total = (bubbleResult.deletedCount || 0) + (postResult.deletedCount || 0);
+    if (total > 0) console.log(`Deleted ${total} expired post(s)`);
   });
   server.listen(PORT, () => {
     console.log(`BUBBLE server listening on port ${PORT}`);

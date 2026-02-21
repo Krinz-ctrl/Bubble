@@ -155,9 +155,8 @@ function MicButton({ onBubbleCreated, avatar = null }) {
 
   const handlePublish = useCallback(async (blob) => {
     if (!blob || blob.size === 0) throw new Error('No audio to upload')
-    const ext = (blob.type && blob.type.split('/')[1]) ? blob.type.split('/')[1].split(';')[0] : 'webm'
     const formData = new FormData()
-    formData.append('audio', blob, `audio.${ext}`)
+    formData.append('audio', blob)
     formData.append('anonymousId', anonymousIdRef.current)
     if (avatar != null && avatar !== '') formData.append('avatar', avatar)
     const res = await fetch(UPLOAD_URL, {
@@ -169,7 +168,7 @@ function MicButton({ onBubbleCreated, avatar = null }) {
       throw new Error(err.error || `Upload failed: ${res.status}`)
     }
     const data = await res.json()
-    const raw = data.bubble != null ? data.bubble : data
+    const raw = data.post != null ? data.post : data.bubble != null ? data.bubble : data
     const bubble = raw._id ? raw : { ...raw, _id: raw.id || `local_${Date.now()}` }
     onBubbleCreated?.(bubble)
   }, [avatar, onBubbleCreated])

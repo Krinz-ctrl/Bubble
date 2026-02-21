@@ -55,7 +55,7 @@ function BubbleCanvas({ bubbles }) {
           x = assignedPositionsRef.current[b._id].x
           y = assignedPositionsRef.current[b._id].y
         }
-        return <Bubble key={b._id} size={size} x={x} y={y} />
+        return <Bubble key={b._id} size={size} x={x} y={y} audioUrl={b.audioUrl} />
       })}
     </div>
   )

@@ -11,8 +11,19 @@ import { MongoClient } from 'mongodb';
 import Bubble from './BubbleModel.js';
 import { getFeed } from './feedController.js';
 
-if (process.env.CLOUDINARY_URL) {
+const hasCloudinaryUrl = !!process.env.CLOUDINARY_URL;
+const hasCloudinaryKeys =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET;
+if (hasCloudinaryUrl) {
   cloudinary.config();
+} else if (hasCloudinaryKeys) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
 }
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -51,7 +62,7 @@ app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No audio file' });
   }
-  if (!process.env.CLOUDINARY_URL) {
+  if (!hasCloudinaryUrl && !hasCloudinaryKeys) {
     return res.status(503).json({ error: 'Cloudinary not configured' });
   }
   try {

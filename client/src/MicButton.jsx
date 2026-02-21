@@ -58,18 +58,19 @@ function WaveformVisualization({ stream }) {
   )
 }
 
-function PostRecordOverlay({ recordedBlob, onCancel, onPublish }) {
+function PostRecordOverlay({ recordedBlob, onCancel, onPublish, isPublishing }) {
   if (!recordedBlob) return null
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 10,
+        zIndex: 100,
         backgroundColor: 'rgba(11, 11, 15, 0.85)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        pointerEvents: 'auto',
       }}
     >
       <div
@@ -80,11 +81,13 @@ function PostRecordOverlay({ recordedBlob, onCancel, onPublish }) {
           display: 'flex',
           gap: '0.75rem',
           boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+          pointerEvents: 'auto',
         }}
       >
         <button
           type="button"
           onClick={() => onCancel()}
+          disabled={isPublishing}
           style={{
             padding: '0.6rem 1.25rem',
             borderRadius: 8,
@@ -93,7 +96,8 @@ function PostRecordOverlay({ recordedBlob, onCancel, onPublish }) {
             color: '#fff',
             fontSize: '0.9rem',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: isPublishing ? 'not-allowed' : 'pointer',
+            opacity: isPublishing ? 0.6 : 1,
           }}
         >
           Cancel
@@ -101,6 +105,7 @@ function PostRecordOverlay({ recordedBlob, onCancel, onPublish }) {
         <button
           type="button"
           onClick={() => onPublish(recordedBlob)}
+          disabled={isPublishing}
           style={{
             padding: '0.6rem 1.25rem',
             borderRadius: 8,
@@ -109,10 +114,11 @@ function PostRecordOverlay({ recordedBlob, onCancel, onPublish }) {
             color: '#fff',
             fontSize: '0.9rem',
             fontWeight: 600,
-            cursor: 'pointer',
+            cursor: isPublishing ? 'not-allowed' : 'pointer',
+            opacity: isPublishing ? 0.6 : 1,
           }}
         >
-          Publish
+          {isPublishing ? 'Publishing…' : 'Publish'}
         </button>
       </div>
     </div>
@@ -140,14 +146,18 @@ function MicButton({ onBubbleCreated, avatar = null }) {
   const [recordStream, setRecordStream] = useState(null)
   const [recordedBlob, setRecordedBlob] = useState(null)
   const [showPostRecordPanel, setShowPostRecordPanel] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [publishError, setPublishError] = useState(null)
   const mediaRecorderRef = useRef(null)
   const streamRef = useRef(null)
   const chunksRef = useRef([])
   const anonymousIdRef = useRef(getOrCreateAnonymousId())
 
   const handlePublish = useCallback(async (blob) => {
+    if (!blob || blob.size === 0) throw new Error('No audio to upload')
+    const ext = (blob.type && blob.type.split('/')[1]) ? blob.type.split('/')[1].split(';')[0] : 'webm'
     const formData = new FormData()
-    formData.append('audio', blob, blob.type ? `audio.${blob.type.split('/')[1] || 'webm'}` : 'audio.webm')
+    formData.append('audio', blob, `audio.${ext}`)
     formData.append('anonymousId', anonymousIdRef.current)
     if (avatar != null && avatar !== '') formData.append('avatar', avatar)
     const res = await fetch(UPLOAD_URL, {
@@ -225,15 +235,22 @@ function MicButton({ onBubbleCreated, avatar = null }) {
   const handleCancel = useCallback(() => {
     setRecordedBlob(null)
     setShowPostRecordPanel(false)
+    setPublishError(null)
   }, [])
 
   const handlePublishFromOverlay = useCallback(async (blob) => {
+    setPublishError(null)
+    setIsPublishing(true)
     try {
       await handlePublish(blob)
       setRecordedBlob(null)
       setShowPostRecordPanel(false)
+      setPublishError(null)
     } catch (err) {
       console.error('Publish failed:', err)
+      setPublishError(err.message || 'Upload failed')
+    } finally {
+      setIsPublishing(false)
     }
   }, [handlePublish])
 
@@ -244,7 +261,26 @@ function MicButton({ onBubbleCreated, avatar = null }) {
           recordedBlob={recordedBlob}
           onCancel={handleCancel}
           onPublish={handlePublishFromOverlay}
+          isPublishing={isPublishing}
         />
+      )}
+      {publishError && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '6rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 101,
+            padding: '0.5rem 1rem',
+            backgroundColor: '#3a2a2a',
+            color: '#ffa0a0',
+            borderRadius: 8,
+            fontSize: '0.85rem',
+          }}
+        >
+          {publishError}
+        </div>
       )}
       <div
       style={{

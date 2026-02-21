@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './loadEnv.js';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -27,11 +27,18 @@ async function connectDB() {
     console.warn('MONGODB_URI not set; running without database.');
     return;
   }
-  await mongoose.connect(MONGODB_URI);
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  db = client.db();
-  console.log('MongoDB connected');
+  try {
+    await mongoose.connect(MONGODB_URI);
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    db = client.db();
+    console.log('MongoDB connected');
+  } catch (err) {
+    console.warn('DB connect failed (server will still start):', err.message);
+    if (err.message?.includes('whitelist')) {
+      console.warn('Add your IP at https://cloud.mongodb.com → Network Access → Add IP Address');
+    }
+  }
 }
 
 app.use(cors());
@@ -78,8 +85,12 @@ connectDB().then(() => {
   });
   server.listen(PORT, () => {
     console.log(`BUBBLE server listening on port ${PORT}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Kill it with: kill $(lsof -i :${PORT} -t)`);
+    } else {
+      console.error(err);
+    }
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error('DB connect failed:', err);
-  process.exit(1);
 });

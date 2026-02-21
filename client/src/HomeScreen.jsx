@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import MicButton from './MicButton.jsx'
 import Bubble from './Bubble.jsx'
 
@@ -61,8 +61,28 @@ function BubbleCanvas({ bubbles }) {
   )
 }
 
+const FEED_URL = 'http://localhost:3000/bubble/feed'
+
 export default function HomeScreen() {
   const [bubbles, setBubbles] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadFeed() {
+      try {
+        const res = await fetch(FEED_URL)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setBubbles(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) setBubbles([])
+      }
+    }
+    loadFeed()
+    return () => { cancelled = true }
+  }, [])
+
   const handleBubbleCreated = useCallback((newBubble) => {
     const size = DEFAULT_BUBBLE_SIZE
     const { x, y } = randomSafePosition(size)

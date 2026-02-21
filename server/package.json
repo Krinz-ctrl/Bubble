@@ -1,0 +1,11 @@
+{
+  "name": "bubble-server",
+  "version": "1.0.0",
+  "description": "BUBBLE MVP server",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}

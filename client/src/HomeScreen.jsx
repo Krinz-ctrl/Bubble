@@ -74,8 +74,8 @@ export default function HomeScreen() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled) return
-        const list = data && Array.isArray(data.bubbles) ? data.bubbles : []
-        setBubbles(list)
+        console.log('Loaded bubbles:', data.bubbles)
+        setBubbles(data.bubbles || [])
       } catch {
         if (!cancelled) setBubbles([])
       }

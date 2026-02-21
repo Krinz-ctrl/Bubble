@@ -59,6 +59,8 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
+  console.log('FILE:', req.file);
+  console.log('BODY:', req.body);
   if (!req.file) {
     return res.status(400).json({ error: 'No audio file' });
   }
@@ -68,24 +70,19 @@ app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
   try {
     const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     const result = await cloudinary.uploader.upload(dataUri, { resource_type: 'video' });
-    const audioUrl = result.secure_url;
-    const avatar = req.body.avatar || null;
-    const anonymousId = req.body.anonymousId || '';
-    const createdAt = new Date();
-    const expiryAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const newBubble = await Bubble.create({
-      audioUrl,
-      avatar,
-      anonymousId,
-      createdAt,
-      expiryAt,
+      audioUrl: result.secure_url,
+      avatar: req.body.avatar || null,
+      anonymousId: req.body.anonymousId || '',
+      createdAt: new Date(),
+      expiryAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       likes: 0,
       impressions: 0,
     });
-    const bubble = newBubble.toObject ? newBubble.toObject() : newBubble;
-    return res.status(200).json({ bubble });
+    console.log('Saved Bubble:', newBubble);
+    res.json({ bubble: newBubble });
   } catch (err) {
-    console.error('Cloudinary upload failed:', err);
+    console.error('Upload failed:', err);
     return res.status(500).json({ error: 'Upload failed' });
   }
 });

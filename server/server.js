@@ -52,7 +52,7 @@ async function connectDB() {
   }
 }
 
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
 
 const server = http.createServer(app);
@@ -68,7 +68,22 @@ app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
   try {
     const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     const result = await cloudinary.uploader.upload(dataUri, { resource_type: 'video' });
-    return res.status(200).json({ audioUrl: result.secure_url });
+    const audioUrl = result.secure_url;
+    const avatar = req.body.avatar || null;
+    const anonymousId = req.body.anonymousId || '';
+    const createdAt = new Date();
+    const expiryAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const newBubble = await Bubble.create({
+      audioUrl,
+      avatar,
+      anonymousId,
+      createdAt,
+      expiryAt,
+      likes: 0,
+      impressions: 0,
+    });
+    const bubble = newBubble.toObject ? newBubble.toObject() : newBubble;
+    return res.status(200).json({ bubble });
   } catch (err) {
     console.error('Cloudinary upload failed:', err);
     return res.status(500).json({ error: 'Upload failed' });
@@ -78,7 +93,7 @@ app.post('/bubble/upload', upload.single('audio'), async (req, res) => {
 app.get('/bubble/feed', async (req, res) => {
   try {
     const bubbles = await getFeed();
-    return res.status(200).json(bubbles);
+    return res.status(200).json({ bubbles });
   } catch (err) {
     console.error('Feed failed:', err);
     return res.status(500).json({ error: 'Feed failed' });

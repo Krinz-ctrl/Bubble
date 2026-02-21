@@ -169,16 +169,9 @@ function MicButton({ onBubbleCreated, avatar = null }) {
       throw new Error(err.error || `Upload failed: ${res.status}`)
     }
     const data = await res.json()
-    const newBubble = {
-      audioUrl: data.audioUrl,
-      avatar: avatar ?? null,
-      anonymousId: anonymousIdRef.current,
-      likes: 0,
-      impressions: 0,
-      createdAt: new Date().toISOString(),
-      _id: `local_${Date.now()}`,
-    }
-    onBubbleCreated?.(newBubble)
+    const raw = data.bubble != null ? data.bubble : data
+    const bubble = raw._id ? raw : { ...raw, _id: raw.id || `local_${Date.now()}` }
+    onBubbleCreated?.(bubble)
   }, [avatar, onBubbleCreated])
 
   const stopRecording = useCallback(() => {

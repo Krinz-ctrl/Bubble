@@ -1,9 +1,7 @@
+import HomeScreen from './HomeScreen.jsx'
+
 function App() {
-  return (
-    <div>
-      <h1>BUBBLE</h1>
-    </div>
-  )
+  return <HomeScreen />
 }
 
 export default App
